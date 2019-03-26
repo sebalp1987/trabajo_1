@@ -1,17 +1,23 @@
-from pyspark.sql.functions import when, col, udf, regexp_replace, upper
-from pyspark.sql.types import IntegerType
+import STRING
+import pandas as pd
+import numpy as np
+import sys
+
+from pyspark.sql.functions import col, udf, regexp_replace, upper, concat, lit
+from pyspark.sql.types import StringType
+from pyspark.sql.window import Window
 
 from resource.spark import SparkJob
 
-class Id(SparkJob):
 
-    def __init__(self, is_diario):
-        self._is_diario = is_diario
+class Preprocess(SparkJob):
+
+    def __init__(self):
         self._spark = self.get_spark_session("IdTask")
 
     def run(self):
-        df, redes = self._extract_data()
-        df = self._transform_data(df, redes, entity_='Z')
+        df_price, df_demanda, df_produccion, df_pinternac, df_subasta = self._extract_data()
+        df = self._transform_data(df_price, df_demanda, df_produccion, df_pinternac, df_subasta)
         self._load_data(df)
         self._spark.stop()
 
@@ -19,25 +25,27 @@ class Id(SparkJob):
         """Load data from Parquet file format.
         :return: Spark DataFrame.
         """
-        if self._is_diario:
-            df = (
-                self._spark
-                .read
-                .csv(STRING.id_input_prediction, header=True, sep=','))
-        else:
-            df = (
-                self._spark
-                .read
-                .csv(STRING.id_input_training, header=True, sep=','))
 
-        redes = (self._spark.
-                 read.
-                 csv(STRING.redes_input, header=False, sep=';'))
+        df_price = (self._spark.
+                    read.
+                    csv(STRING.file_precio, header=True, sep=';'))
 
-        return df, redes
+        df_demanda = (self._spark.
+                      read.
+                      csv(STRING.file_demanda, header=True, sep=';'))
+
+        df_produccion = (self._spark.
+                         read.
+                         csv(STRING.file_output, header=True, sep=';'))
+
+        df_pinternac = pd.read_csv(STRING.file_pinternac, sep=';')
+
+        df_subasta = self._spark.read.csv(STRING.file_subasta, header=True, sep=';')
+
+        return df_price, df_demanda, df_produccion, df_pinternac, df_subasta
 
     @staticmethod
-    def _transform_data(df, redes, entity_):
+    def _transform_data(df_price, df_demanda, df_produccion, df_pinternac, df_subasta):
         """Transform original dataset.
 
         :param df: Input DataFrame.
@@ -45,48 +53,101 @@ class Id(SparkJob):
         :param entity_: Entity Zurich 'Z' or Another (BANC SABADELL 'BS')
         :return: Transformed DataFrame.
         """
-        # Cast key variables and rename headers
-        exprs = [col(column).alias(column.replace('"', '')) for column in df.columns]
-        df = df.select(*exprs)
-        exprs = [col(column).alias(column.replace(' ', '')) for column in df.columns]
-        df = df.select(*exprs)
-        df = df.withColumn('id_siniestro', df.id_siniestro.cast(IntegerType()))
 
-        # Type of person: Fisica or Juridica
-        df = df.withColumn('dummy_fisica', when(df.cliente_clase_persona_codigo == 'F', 1).otherwise(0))
+        # Correct Decimals by dots
+        bad_columns = ['TOTAL_IMPORTACION_ES', 'TOTAL_PRODUCCION_ES', 'TOTAL_DEMANDA_NAC_ES', 'TOTAL_EXPORTACIONES_ES',
+                       'TOTAL_DDA_ES', 'TOTAL_POT_IND_ES', 'TOTAL_PRODUCCION_POR', 'TOTAL_DEMANDA_POR']
+        for i in bad_columns:
+            df_demanda = (
+                df_demanda
+                    .withColumn(i, regexp_replace(i, '\\.', ''))
+                    .withColumn(i, regexp_replace(i, ',', '.').cast('float'))
 
-        # Product TYPE dummies
-        types = df.select('id_producto').distinct().collect()
-        types = [i.id_producto for i in types]
-        product_type = [when(df.id_producto == ty, 1).otherwise(0).alias('d_producto_' + ty) for ty in types]
-        cols = list(df.columns)
-        df = df.select(cols + product_type)
+            )
 
-        # ENTITY type: Zurich or Another
-        df = df.filter(df['poliza_entidad_legal'] == entity_)
+        bad_columns = ['HIDRAULICA_CONVENC', 'HIDRAULICA_BOMBEO', 'NUCLEAR', 'CARBON NACIONAL',
+                       'CARBON_IMPO', 'CICLO_COMBINADO',
+                       'FUEL_SIN_PRIMA', 'FUEL_PRIMA', 'REG_ESPECIAL']
+        for i in bad_columns:
+            df_produccion = (
+                df_produccion
+                    .withColumn(i, regexp_replace(i, '\\.', ''))
+                    .withColumn(i, regexp_replace(i, ',', '.').cast('float'))
+            )
 
-        # DOC TYPE: We create dummies for National IDs types
-        types = df.select('cliente_tipo_documento').distinct().collect()
-        types = [i.cliente_tipo_documento for i in types]
-        doc_type = [when(df.cliente_tipo_documento == ty, 1).otherwise(0).alias('d_cliente_tipo_documento_' + ty) for ty
-                    in
-                    types]
-        cols = list(df.columns)
-        df = df.select(cols + doc_type)
+        # Select Price Table
+        df_price = df_price.select(*['ANIO', 'MES', 'DIA', 'HORA', 'PESPANIA', 'PPORTUGAL'])
 
-        # BAD ID: We check if a id is not well defined
-        id_corrector = udf(lambda tipo_doc, nif: nif_corrector.id_conversor(tipo_doc, nif), IntegerType())
-        df = df.withColumn('bad_id', id_corrector(df.cliente_tipo_documento, df.id_fiscal))
+        # Date Variables
+        df_demanda = df_demanda.withColumn('DATE', concat(col('DIA'), lit('-'), col('MES'), lit('-'), col('ANIO')))
+        df_produccion = df_produccion.withColumn('DATE',
+                                                 concat(col('DIA'), lit('-'), col('MES'), lit('-'), col('ANIO')))
+        df_price = df_price.withColumn('DATE', concat(col('DIA'), lit('-'), col('MES'), lit('-'), col('ANIO')))
 
-        # REDES: We check in our list of redes if the NIF exists
-        redes = redes.withColumn('_c0', upper(regexp_replace('_c0', '-', '')))
-        df = df.join(redes, df.id_fiscal == redes._c0, how='left')
-        df = df.withColumn('_c0', when(df['_c0'].isNull(), 0).otherwise(1))
-        df = df.withColumnRenamed('_c0', 'id_clan')
+        # Group By Day
+        df_price = (df_price
+                    .groupby('DATE').agg({'PESPANIA': 'avg', 'PPORTUGAL': 'avg'})
+                    .withColumnRenamed('avg(PESPANIA)', 'PSPAIN')
+                    .withColumnRenamed('avg(PPORTUGAL)', 'PPORTUGAL')
+                    )
 
-        # Drop useless columns
-        df = df.drop(*['id_producto', 'id_dossier', 'poliza_entidad_legal', 'cliente_clase_persona_codigo',
-                       'cliente_tipo_documento'])
+        df_demanda = df_demanda.groupby('DATE').sum()
+        df_produccion = df_produccion.fillna(0)
+        df_produccion = df_produccion.groupby('DATE').sum()
+
+        # SUBASTA
+        df = df_price.join(df_subasta, how='left', on='DATE').fillna({'DUMMY': 0})
+        delete_var = ['ANIO', 'MES', 'DIA', 'HORA']
+        df_demanda = df_demanda.drop(*delete_var)
+        df_produccion = df_produccion.drop(*delete_var)
+        df = df.drop(*['ANIO', 'DIA', 'HORA'])
+
+        df = df.join(df_demanda, how='left', on='DATE')
+        df = df.join(df_produccion, how='left', on='DATE')
+
+        # INTERPOLATE
+        df = df.toPandas()
+        df_pinternac = df_pinternac.interpolate(limit_direction='backward', method='nearest')
+        df = pd.merge(df, df_pinternac, how='left', left_on='DATE', right_on='FECHA')
+        del df['FECHA']
+
+        # DUMMY VARS
+        dummy_var = [5, 10, 15, 20, 30]
+        df.loc[df['DUMMY'] == 0, 'DUMMY'] = np.NaN
+        for i in dummy_var:
+            name = 'DUMMY_' + str(i) + '_DAY'
+            df[name] = pd.Series(df['DUMMY'], index=df.index)
+            rows = i * 24
+            df[name] = df[name].interpolate(limit=rows, limit_direction='backward', method='values')
+            df[name] = df[name].fillna(0)
+
+        df['DUMMY'] = df['DUMMY'].fillna(0)
+        df = df.dropna(axis=0, how='any')
+
+        # Regime Change
+        df['DATE'] = pd.to_datetime(df['DATE'], format='%d-%m-%Y')
+        df.loc[df['DATE'] >= '2010-01-01', 'DUMMY_2010_REGIMEN'] = 1
+        df['DUMMY_2010_REGIMEN'] = df['DUMMY_2010_REGIMEN'].fillna(0)
+
+        # WORK DAY
+        df['WEEKDAY'] = df['DATE'].dt.dayofweek
+        df['MES'] = df['DATE'].dt.month
+        print(df['MES'])
+        df['WORKDAY'] = pd.Series(0, index=df.index)
+        df.loc[df['WEEKDAY'].isin([0, 1, 2, 3, 4]), 'WORKDAY'] = 1
+        del df['WEEKDAY']
+
+        # SUMMER-WINTER
+        df['SUMMER'] = pd.Series(0, index=df.index)
+        df.loc[df['MES'].isin([7, 8]), 'SUMMER'] = 1
+        df['WINTER'] = pd.Series(0, index=df.index)
+        df.loc[df['MES'].isin([12 , 1]), 'WINTER'] = 1
+        del df['MES']
+        bool_cols = [col for col in df
+                     if df[[col]].dropna().isin([0, 1]).all().values]
+        for i in df.drop(bool_cols + ['DATE'], axis=1).columns.values.tolist():
+            df[i] = df[i].map(float)
+            df[i] = df[i].round(2)
 
         return df
 
@@ -95,12 +156,8 @@ class Id(SparkJob):
         :param df: DataFrame to print.
         :return: None
         """
-        if self._is_diario:
-            name = STRING.id_output_prediction
-        else:
-            name = STRING.id_output_training
-        df.coalesce(1).write.mode("overwrite").option("header", "true").option("sep", ";").csv(name)
+        df.to_csv(STRING.final_file, sep=';', index=False)
 
 
 if __name__ == '__main__':
-    Id(is_diario=True).run()
+    Preprocess().run()
