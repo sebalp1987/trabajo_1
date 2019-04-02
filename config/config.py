@@ -1,6 +1,6 @@
 params = {
 
-    'total_var': ['PSPAIN', 'PPORTUGAL', 'DUMMY', 'sum(TOTAL_IMPORTACION_ES)',
+    'total_var': ['PSPAIN', 'PPORTUGAL', 'QNORD', 'DUMMY', 'sum(TOTAL_IMPORTACION_ES)',
                   'sum(TOTAL_PRODUCCION_ES)', 'sum(TOTAL_DEMANDA_NAC_ES)',
                   'sum(TOTAL_EXPORTACIONES_ES)', 'sum(TOTAL_DDA_ES)',
                   'sum(TOTAL_POT_IND_ES)', 'sum(TOTAL_PRODUCCION_POR)',
@@ -10,8 +10,12 @@ params = {
                   'sum(FUEL_PRIMA)', 'sum(REG_ESPECIAL)', 'TREND', 'PRICE_OIL',
                   'PRICE_GAS', 'RISK_PREMIUM', 'TME_MADRID', 'TMAX_MADRID', 'TMIN_MADRID',
                   'PP_MADRID', 'TME_BCN', 'TMAX_BCN', 'TMIN_BCN', 'PP_BCN', 'GDP',
-                  '%EOLICA', 'DUMMY_5_DAY', 'DUMMY_10_DAY', 'DUMMY_15_DAY',
-                  'DUMMY_20_DAY', 'DUMMY_30_DAY', 'DUMMY_2010_REGIMEN', 'WORKDAY',
+                  '%EOLICA', 'DUMMY_BACK_5_DAY',
+       'DUMMY_BACK_10_DAY', 'DUMMY_BACK_15_DAY', 'DUMMY_BACK_20_DAY',
+       'DUMMY_BACK_25_DAY', 'DUMMY_BACK_30_DAY', 'DUMMY_BACK_45_DAY',
+       'DUMMY_FORW_5_DAY', 'DUMMY_FORW_10_DAY', 'DUMMY_FORW_15_DAY',
+       'DUMMY_FORW_20_DAY', 'DUMMY_FORW_25_DAY', 'DUMMY_FORW_30_DAY',
+       'DUMMY_FORW_45_DAY', 'DUMMY_2010_REGIMEN', 'WORKDAY',
                   'SUMMER', 'WINTER'],
 
     'linear_var1': ['PSPAIN', 'DUMMY',
@@ -23,9 +27,27 @@ params = {
                     'DUMMY_2010_REGIMEN',
                    'WINTER'],
 
-    'linear_var': ['PSPAIN', 'DUMMY',
-                  'sum(TOTAL_PRODUCCION_ES)', 'sum(TOTAL_PRODUCCION_POR)',
-                
-                'TME_MADRID', 'TMIN_MADRID', 'WORKDAY'
-                ]
+    'linear_var2': ['PSPAIN', 'DUMMY', 'sum(TOTAL_IMPORTACION_ES)',
+
+                  'sum(TOTAL_EXPORTACIONES_ES)',
+                  'sum(TOTAL_POT_IND_ES)', 'sum(TOTAL_PRODUCCION_POR)',
+                  'sum(HIDRAULICA_CONVENC)',
+                  'sum(HIDRAULICA_BOMBEO)', 'sum(NUCLEAR)', 'sum(CARBON NACIONAL)',
+                  'sum(CARBON_IMPO)', 'sum(CICLO_COMBINADO)', 'sum(FUEL_SIN_PRIMA)',
+                  'sum(FUEL_PRIMA)', 'sum(REG_ESPECIAL)', 'TREND', 'PRICE_OIL',
+                  'PRICE_GAS', 'RISK_PREMIUM',
+                  '%EOLICA'
+                    ],
+    'linear_var': ['PSPAIN', 'DUMMY_FORW_15_DAY', 'sum(TOTAL_IMPORTACION_ES)',
+                  'sum(TOTAL_PRODUCCION_ES)', 'D1_QNORD'
+                'D1_QDIF',
+
+                  'sum(TOTAL_POT_IND_ES)', 'sum(TOTAL_PRODUCCION_POR)',
+                  'sum(HIDRAULICA_CONVENC)',
+                  'sum(HIDRAULICA_BOMBEO)', 'sum(NUCLEAR)', 'sum(CARBON NACIONAL)',
+                  'sum(CARBON_IMPO)', 'sum(CICLO_COMBINADO)', 'sum(FUEL_SIN_PRIMA)',
+                  'sum(FUEL_PRIMA)', 'sum(REG_ESPECIAL)', 'TREND', 'PRICE_OIL',
+                  'PRICE_GAS', 'RISK_PREMIUM',
+                  '%EOLICA',
+                  'SUMMER', 'WINTER', 'NULL_PRICE']
 }

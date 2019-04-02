@@ -1,7 +1,7 @@
 from sklearn import linear_model
 import statsmodels.stats.stattools
 import matplotlib.pyplot as plot
-from statsmodels.tsa.stattools import adfuller
+from statsmodels.tsa.stattools import adfuller, grangercausalitytests
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 import pandas as pd
 from statsmodels.stats.diagnostic import acorr_ljungbox
@@ -102,7 +102,7 @@ def test_stationarity(timeseries, plot_show=False, lags=7):
         plot.show()
         plot.close()
 
-    dftest = adfuller(timeseries, autolag='AIC', maxlag=7)
+    dftest = adfuller(timeseries, autolag='AIC')
     dfoutput = pd.Series(dftest[0:4],
                              index=['Test Statistic', 'p-value', '#Lags Used', 'Number of Observations Used'])
     for key, value in dftest[4].items():
@@ -132,7 +132,7 @@ def serial_correlation(variable, plot_show=True):
         plot.show()
         plot.close()
     # https://robjhyndman.com/hyndsight/ljung-box-test/
-    lags = min(14, round(len(variable)/5))
+    lags = min(10, round(len(variable)/5))
     qljb, pvalue = acorr_ljungbox(variable, lags=lags)
     print(qljb)
     print(pvalue)
@@ -148,3 +148,26 @@ def get_residuals(X, Y):
 
     error = pd.DataFrame(error, columns=['error'])
     return error
+
+
+def granger_causality(df, evaluation_variable, dependant_variable='PSPAIN', maxlag=1):
+    """
+    The Null hypothesis for grangercausalitytests is that the time series in the second column,
+    x2, does NOT Granger cause the time series in the first column, x1.
+    Grange causality means that past values of x2 have a statistically significant
+    effect on the current value of x1, taking past values of x1 into account as regressors.
+    We reject the null hypothesis that x2 does not Granger cause x1 if the pvalues are below a
+    desired size of the test.
+
+    :param df:
+    :param dependant_variable:
+    :param evaluation_variable:
+    :return:
+    """
+
+    df1 = df[[evaluation_variable, dependant_variable]].values
+    df2 = df[[dependant_variable, evaluation_variable]].values
+    print('Y determina X')
+    yx = grangercausalitytests(df1, maxlag=maxlag)
+    print('X determina Y')
+    xy = grangercausalitytests(df2, maxlag=maxlag)
