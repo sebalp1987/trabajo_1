@@ -1,13 +1,11 @@
 import pandas as pd
 import STRING
 import seaborn as sns
-import numpy as np
 import statsmodels.api as sm
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 import matplotlib.pyplot as plot
 from scipy.stats import normaltest, shapiro
-from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
-from sklearn import linear_model
+from sklearn.metrics import r2_score
 import resource.temporal_statistics as sts
 from preprocessing import stepwise_reg
 from config import config

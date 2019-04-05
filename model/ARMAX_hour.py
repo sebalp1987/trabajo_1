@@ -4,9 +4,6 @@ import seaborn as sns
 import statsmodels.api as sm
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 import matplotlib.pyplot as plot
-from scipy.stats import normaltest, shapiro
-from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
-from sklearn import linear_model
 import resource.temporal_statistics as sts
 from config import config
 sns.set()

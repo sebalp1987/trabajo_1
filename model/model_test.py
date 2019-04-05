@@ -1,15 +1,9 @@
 import STRING
-import matplotlib.pyplot as plot
 import pandas as pd
 import seaborn as sns
-from statsmodels.tsa.seasonal import seasonal_decompose
-from statsmodels.regression.linear_model import OLS
-from statsmodels.tools import add_constant
-from scipy.stats import normaltest, shapiro
 from statsmodels.sandbox.regression.gmm import IV2SLS
 import numpy as np
 
-from resource import temporal_statistics as sts
 
 sns.set()
 

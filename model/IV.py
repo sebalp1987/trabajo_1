@@ -3,16 +3,7 @@ import STRING
 import seaborn as sns
 import numpy as np
 import statsmodels.api as sm
-from statsmodels.stats.outliers_influence import variance_inflation_factor
-import matplotlib.pyplot as plot
-from scipy.stats import normaltest, shapiro
-from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
-from sklearn import linear_model
-import resource.temporal_statistics as sts
-from preprocessing import stepwise_reg
-from config import config
 from statsmodels.sandbox.regression.gmm import IV2SLS
-from sklearn.feature_selection import f_regression
 from linearmodels.iv import IV2SLS as iv2reg
 sns.set()
 

@@ -1,11 +1,9 @@
 import STRING
 import pandas as pd
 import numpy as np
-import sys
 
 from pyspark.sql.functions import col, udf, regexp_replace, upper, concat, lit
 from pyspark.sql.types import StringType
-from pyspark.sql.window import Window
 
 from resource.spark import SparkJob
 
