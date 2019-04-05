@@ -81,8 +81,6 @@ for inst in instruments:
     df[inst] = (df[inst] - df[inst].shift(1)) - (df[inst].shift(1) - df[inst].shift(2))
 
 df = df.dropna(axis=0)
-print(df.shape)
-
 variable_used = ['D1_sum(CICLO_COMBINADO)', 'LQ1', 'LQ2',
                  'D1_sum(HIDRAULICA_CONVENC)', 'DUMMY_FORW_45_DAY', 'ma.L1.PSPAIN', 'ar.L1.PSPAIN', 'ar.L2.PSPAIN',
                  'ar.L4.PSPAIN', 'ar.L6.PSPAIN']

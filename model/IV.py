@@ -13,6 +13,7 @@ from preprocessing import stepwise_reg
 from config import config
 from statsmodels.sandbox.regression.gmm import IV2SLS
 from sklearn.feature_selection import f_regression
+from linearmodels.iv import IV2SLS as iv2reg
 sns.set()
 
 df = pd.read_csv(STRING.file_detrend, sep=';')
@@ -102,30 +103,12 @@ reg = IV2SLS(endog=y, exog=df[variable_used + variable_instrumented], instrument
 results = reg.fit()
 print(results.summary())
 
-####################################################################################################################
-'''
-instruments = ['WORKDAY', 'WINTER', 'TME']
-instruments_lag = []
-inst_square = []
-for inst in instruments:
-    # if inst.startswith('T'):
-        # df[inst] = df[inst]**2
-    df['L1_' + inst] = df[inst].shift(1)
-    df['L2_' + inst] = df[inst].shift(2)
-    instruments_lag += ['L1_' + inst, 'L2_' + inst]
-instruments_lag += instruments
-df = df.dropna(axis=0)
-y = y[df.index[0]::]
-
-variable_used = ['D1_sum(CICLO_COMBINADO)', 'D1_sum(FUEL_PRIMA)',
-                 'D1_sum(HIDRAULICA_CONVENC)', 'DUMMY_FORW_15_DAY', 'ma.L1.PSPAIN', 'ar.L1.PSPAIN', 'ar.L2.PSPAIN',
-                 'ar.L4.PSPAIN', 'ar.L6.PSPAIN']
-
-variable_instrumented = ['QDIF', 'LQ1', 'LQ2']
-print(df.shape)
-reg = IV2SLS(endog=y, exog=df[variable_used + variable_instrumented], instrument=df[variable_used + instruments])
-results = reg.fit()
-print(results.summary())
-
-# results.spec_hausman
-'''
+# Second stage
+mod = iv2reg(y, df[variable_used], df[variable_instrumented], df[instruments])
+res = mod.fit(cov_type='unadjusted')
+print(res.durbin())
+print(res.wu_hausman())
+print(res.wooldridge_regression)
+print(res.sargan)
+print(res.anderson_rubin)
+print(res.basmann_f)

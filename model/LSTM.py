@@ -13,14 +13,26 @@ from scipy.stats import multivariate_normal
 import seaborn as sns
 from keras import losses
 import math
+sns.set()
 
 np.random.seed(42)
-os.chdir(STRING.root)
-days = ''
-train_normal = pd.read_csv('train_normal' + str(days) +'.csv', sep=';', encoding='latin1', parse_dates=['DIA'])
-valid_normal = pd.read_csv('valid_normal' + str(days) +'.csv', sep=';', encoding='latin1', parse_dates=['DIA'])
-valid_mixed = pd.read_csv('valid_mixed' + str(days) +'.csv', sep=';', encoding='latin1', parse_dates=['DIA'])
-test = pd.read_csv('test' + str(days) +'.csv', sep=';', encoding='latin1', parse_dates=['DIA'])
+
+"""
+LSTM es capaz de recordar a lo largo de secuencias largas. Normalmente, el estado de la red se resetea despues
+de cada batch termina de entrenar (epochs). Podemos ganar mayor control determinando cuándo la red se resetea haciendo
+que el layer del LSTM sea "stateful". Esto implica que podemos construir estados sobre todo el training e incluso
+mantenter este estado si es necesario.
+Requiere que los datos no esten shuffle. Esto es porque queremos que aprenda de la secuencia de las observaciones y no 
+que haga un shuffle dentro del epoch.
+Requiere explícitamente resetear la red despues de cada epoch (models.reset_states()). Esto implica que tenemos
+que crear nuestro propio loop fuera de los epochs y dentro de los epochs.
+"""
+
+
+train_normal = pd.read_csv(STRING.train, sep=';', parse_dates=['DATE'])
+valid_normal = pd.read_csv(STRING.valid_normal, sep=';', parse_dates=['DATE'])
+valid_mixed = pd.read_csv(STRING.valid_mixed, sep=';', parse_dates=['DATE'])
+test = pd.read_csv(STRING.test, sep=';', parse_dates=['DATE'])
 
 train_normal['CONTROL'] = pd.Series(0, index=train_normal.index)
 valid_normal['CONTROL'] = pd.Series(1, index=valid_normal.index)
@@ -28,31 +40,11 @@ valid_mixed['CONTROL'] = pd.Series(2, index=valid_mixed.index)
 test['CONTROL'] = pd.Series(3, index=test.index)
 
 df = pd.concat([train_normal, valid_normal, valid_mixed, test], axis=0)
-df = df.sort_values(by=['DIA'], ascending=[True]).reset_index(drop=True)
-df.loc[df['DIA'] <= '2010-03-28', 'CONTROL'] = 0
-# df = df[df['DIA'] > '2010-03-28']
-# df = df[df['DIA'] <= '2013-11-22']
-del df['Unnamed: 0']
-df['WEEKDAY'] = df['DIA'].dt.dayofweek
-# df['MES'] = df['DIA'].dt.month
-# df['ANIO'] = df['DIA'].dt.year
+df = df.sort_values(by=['DATE'], ascending=[True]).reset_index(drop=True)
 
 cols = df.columns.values.tolist()
 print(cols)
-# df = df[cols[0:9] + ['PESPANIA', 'TARGET']]
-df = df.set_index('DIA')
-del df['FECHA']
-
-# Stationarity
-df['PESPANIA'] = df['PESPANIA'] - df['PESPANIA'].shift(1)
-need_differenciation = ['TOTAL_PRODUCCION_POR', 'TOTAL_DEMANDA_POR', 'CICLO_COMBINADO', 'FUEL_PRIMA',
-                                'PRICE_OIL', 'PRICE_GAS', 'RISK_PREMIUM', 'TME_MADRID', 'TMAX_MADRID', 'TME_BCN',
-                                'TMAX_BCN', 'TMIN_BCN', 'GDP']
-
-for i in need_differenciation:
-    name = 'D_' + str(i)
-    df[name] = df[i] - df[i].shift(1)
-    del df[i]
+df = df.set_index('DATE')
 
 # WE CREATE A LAG
 look_back = 7
@@ -63,9 +55,10 @@ for col in df.columns.values.tolist():
 
 # LO PRIMERO ES ORDENAR PARA QUE QUEDEN LOS LAGS DE UN LADO Y LA VARIABLE Y DEL OTRO
 cols = df.columns.values.tolist()
-df = df[['PESPANIA'] + [x for x in cols if x.startswith('L') and 'PESPANIA' in x] + [x for x in cols if x.startswith('L') and
-                                                                      not 'PESPANIA' in x] +
-        ['CONTROL', 'TARGET']]
+df = df[
+    ['PSPAIN'] + [x for x in cols if x.startswith('L') and 'PSPAIN' in x] + [x for x in cols if x.startswith('L') and
+                                                                             not 'PSPAIN' in x] +
+    ['CONTROL', 'TARGET']]
 
 df = df.dropna()
 
@@ -75,7 +68,7 @@ train_normal = df[df['CONTROL'] == 0]
 valid_normal['CONTROL'] = df[df['CONTROL'] == 1]
 valid_mixed['CONTROL'] = df[df['CONTROL'] == 2]
 test['CONTROL'] = df[df['CONTROL'] == 3]
-df = df.set_index('DIA')
+df = df.set_index('DATE')
 
 # We normalize
 df_c = df[['CONTROL', 'TARGET']]
@@ -94,10 +87,10 @@ train_normal = df[df['CONTROL'] == 0]
 valid_normal = df[df['CONTROL'] == 1]
 valid_mixed = df[df['CONTROL'] == 2]
 test = df[df['CONTROL'] == 3]
-train_normal = train_normal.drop(['CONTROL', 'DIA', 'TARGET'], axis=1)
-valid_normal = valid_normal.drop(['CONTROL', 'DIA', 'TARGET'], axis=1)
-valid_mixed = valid_mixed.drop(['CONTROL', 'DIA', 'TARGET'], axis=1)
-test = test.drop(['CONTROL', 'DIA', 'TARGET'], axis=1)
+train_normal = train_normal.drop(['CONTROL', 'DATE', 'TARGET'], axis=1)
+valid_normal = valid_normal.drop(['CONTROL', 'DATE', 'TARGET'], axis=1)
+valid_mixed = valid_mixed.drop(['CONTROL', 'DATE', 'TARGET'], axis=1)
+test = test.drop(['CONTROL', 'DATE', 'TARGET'], axis=1)
 
 # LO SEGUNDO ES DEFINIR COMO "X" TODOS LOS LAGS y COMO "Y" AL PESPANIA
 print(train_normal.columns.values.tolist())
@@ -108,12 +101,14 @@ valid_mixed_batch = int(math.floor(valid_mixed.shape[0] / batch_size) * batch_si
 test_batch = int(math.floor(test.shape[0] / batch_size) * batch_size)
 print(train_batch)
 train_normal_x, train_normal_y = train_normal.values[:train_batch, 1:], train_normal.values[:train_batch, 0]
-valid_normal_x, valid_normal_y = valid_normal.values[:valid_normal_batch, 1:], valid_normal.values[:valid_normal_batch, 0]
+valid_normal_x, valid_normal_y = valid_normal.values[:valid_normal_batch, 1:], valid_normal.values[:valid_normal_batch,
+                                                                               0]
 valid_mixed_x, valid_mixed_y = valid_mixed.values[:valid_mixed_batch, 1:], valid_mixed.values[:valid_mixed_batch, 0]
 test_x, test_y = test.values[:test_batch, 1:], test.values[: test_batch, 0]
 
 # We need the data as [samples, time_steps, features] - Now is [samples, features]
-train_normal_x = np.reshape(train_normal_x, (train_normal_x.shape[0], look_back, features)) # TERCERO: TENEMOS QUE DEFINIR SAMPLES, TIME_STEPS=LAGS, FEATURES=FEATURES
+train_normal_x = np.reshape(train_normal_x, (train_normal_x.shape[0], look_back,
+                                             features))  # TERCERO: TENEMOS QUE DEFINIR SAMPLES, TIME_STEPS=LAGS, FEATURES=FEATURES
 valid_normal_x = np.reshape(valid_normal_x, (valid_normal_x.shape[0], look_back, features))
 valid_mixed_x = np.reshape(valid_mixed_x, (valid_mixed_x.shape[0], look_back, features))
 test_x = np.reshape(test_x, (test_x.shape[0], look_back, features))
@@ -122,7 +117,8 @@ print(train_normal_x.shape, train_normal_y.shape, valid_normal_x.shape, valid_no
 
 # LSTM
 model = Sequential()
-model.add(LSTM(100, batch_input_shape=(batch_size, train_normal_x.shape[1], train_normal_x.shape[2]), stateful=True, return_sequences=True, activation='tanh'))
+model.add(LSTM(100, batch_input_shape=(batch_size, train_normal_x.shape[1], train_normal_x.shape[2]), stateful=True,
+               return_sequences=True, activation='tanh'))
 model.add(Dropout(0.2))
 model.add(LSTM(100, return_sequences=True, activation='tanh'))
 model.add(Dropout(0.2))
@@ -138,8 +134,8 @@ early_stopping = EarlyStopping(patience=2)
 
 for i in range(50):
     model.fit(train_normal_x, train_normal_y, epochs=1, batch_size=batch_size, validation_data=(valid_normal_x,
-                                                                                                   valid_normal_y),
-                        verbose=2, shuffle=False, callbacks=[early_stopping])
+                                                                                                valid_normal_y),
+              verbose=2, shuffle=False, callbacks=[early_stopping])
     model.reset_states()
 # PLOT
 '''
@@ -150,7 +146,7 @@ plot.show()
 '''
 
 # PREDICTIONS
-cols.remove('PESPANIA')
+cols.remove('PSPAIN')
 # Train
 yhat = model.predict(train_normal_x, batch_size=batch_size)
 print(yhat)
@@ -161,7 +157,6 @@ print(train_normal_x.shape)
 inv_yhat = np.concatenate((yhat, train_normal_x), axis=1)
 inv_yhat = scaler.inverse_transform(inv_yhat)
 train_prediction = inv_yhat[:, 0]
-
 
 train_normal_y = train_normal_y.reshape(len(train_normal_y), 1)
 inv_y = np.concatenate((train_normal_y, train_normal_x), axis=1)
@@ -175,7 +170,6 @@ inv_yhat = np.concatenate((yhat, valid_mixed_x), axis=1)
 inv_yhat = scaler.inverse_transform(inv_yhat)
 valid2_prediction = inv_yhat[:, 0]
 
-
 valid_mixed_y = valid_mixed_y.reshape(len(valid_mixed_y), 1)
 inv_y = np.concatenate((valid_mixed_y, valid_mixed_x), axis=1)
 inv_y = scaler.inverse_transform(inv_y)
@@ -187,7 +181,6 @@ test_x = test_x.reshape(test_x.shape[0], look_back * features)
 inv_yhat = np.concatenate((yhat, test_x), axis=1)
 inv_yhat = scaler.inverse_transform(inv_yhat)
 test_prediction = inv_yhat[:, 0]
-
 
 test_y = test_y.reshape(len(test_y), 1)
 inv_y = np.concatenate((test_y, test_x), axis=1)
@@ -203,7 +196,7 @@ plot.plot(train_true, label='true')
 plot.plot(train_prediction, label='predicted')
 plot.plot(mae, label='rmse')
 plot.legend()
-plot.title('Training Using 3 Timesteps')
+plot.title('Training Using 7 Timesteps')
 plot.show()
 
 # ERROR VECTOR TRAIN
@@ -213,12 +206,12 @@ cov = np.cov(train_error_vector, rowvar=False)
 p_values = multivariate_normal.logpdf(train_error_vector, mean, cov)
 plot.figure(figsize=(15, 5))
 plot.plot(p_values)
-plot.title('p-values')
+plot.title('p-values Train')
 plot.show()
 
 # ERROR VECTOR OPTIMIZING THRESHOLD (VALID_2)
 v2_error_vector = valid2_true - valid2_prediction
-v2_error_vector[v2_error_vector < 0] = 0
+# v2_error_vector[v2_error_vector < 0] = 0
 
 v2_p_values = multivariate_normal.logpdf(v2_error_vector, mean, cov)
 
@@ -246,17 +239,17 @@ for threshold in thresholds:
 scores = np.array(scores)
 threshold = thresholds[scores[:, 2].argmax()]
 threshold = -5.0
-print('final Threshold ', threshold)
+print('final Threshold SET by Valid Mixed', threshold)
 predicted = [1 if e < threshold else 0 for e in valid_mixed_df.LogPD.values]
 predicted = list(map(int, predicted))
 
-print('PRECISION ', precision_score(valid_mixed_df.TARGET.values, predicted))
-print('RECALL ', recall_score(valid_mixed_df.TARGET.values, predicted))
-print('FBSCORE ', fbeta_score(valid_mixed_df.TARGET.values, predicted, beta=1))
+print('PRECISION VALID MIXED', precision_score(valid_mixed_df.TARGET.values, predicted))
+print('RECALL VALID MIXED', recall_score(valid_mixed_df.TARGET.values, predicted))
+print('FBSCORE VALID MIXED', fbeta_score(valid_mixed_df.TARGET.values, predicted, beta=1))
 
 # ERROR VECTOR TEST
 rsme = np.sqrt(mean_squared_error(test_true, test_prediction))
-print('RMSE TRAIN %.2f' % rsme)
+print('RMSE TEST %.2f' % rsme)
 test_error_vector = test_true - test_prediction
 test_error_vector[test_error_vector < 0] = 0
 test_p_values = multivariate_normal.logpdf(test_error_vector, mean, cov)
@@ -269,8 +262,9 @@ plot.axhline(y=threshold, ls='dashed', label='Threshold', color=sns.xkcd_rgb["da
 plot.legend(bbox_to_anchor=(1, .45), borderaxespad=0.)
 plot.xlabel("Time step")
 plot.ylabel("Log PD")
-plot.title("Validation2 p-values")
-plot.show()
+plot.title("Validation Mixed p-values")
+# plot.show()
+plot.close()
 
 # FINAL PLOT VALIDATION 2
 f = plot.figure(figsize=(20, 10))
@@ -280,7 +274,8 @@ print(v2_below_threshold)
 ax1 = plot.subplot(211)
 ax1.plot(valid2_true, label='True Value', color=sns.xkcd_rgb["denim blue"])
 ax1.plot(valid2_prediction, ls='dashed', label='Predicted Value', color=sns.xkcd_rgb["medium green"])
-ax1.plot(abs(valid2_true - valid2_prediction), label='Error', color=sns.xkcd_rgb["pale red"]) # CAMBIAR ESTOS A LA FUNCION DE PERDIDA DE LSTM
+ax1.plot(abs(valid2_true - valid2_prediction), label='Error',
+         color=sns.xkcd_rgb["pale red"])  # CAMBIAR ESTOS A LA FUNCION DE PERDIDA DE LSTM
 for column in v2_below_threshold[0]:
     ax1.axvline(x=column, color=sns.xkcd_rgb["dark peach"], alpha=.5)
 
@@ -290,25 +285,25 @@ ax1.axvline(x=v2_below_threshold[0][-1], color=sns.xkcd_rgb["dark peach"], alpha
 ax1.legend(bbox_to_anchor=(1.02, .3), borderaxespad=0., frameon=True)
 ax1.set_xticklabels([])
 plot.ylabel("Power Price")
-plot.title("Validation2. Using 7 timestep")
+plot.title("Validation Mixed. Using 7 timestep")
 
 # plot v2 log PD
 ax2 = plot.subplot(212)
 values_date = np.arange(0, len(valid_mixed_c.index), 50)
-valid_mixed_c['DIA'] = valid_mixed_c['DIA'].astype(str)
+valid_mixed_c['DATE'] = valid_mixed_c['DATE'].astype(str)
 df_dates_xticks = valid_mixed_c[valid_mixed_c.index.isin(values_date)]
 ax2.plot(v2_p_values, label='Log PD', color=sns.xkcd_rgb["dark teal"])
 anomalies = valid_mixed_c[valid_mixed_c['TARGET'] == 1]
 anomalies = anomalies.index.values.tolist()
 print(anomalies)
 for i in anomalies:
-    ax2.axvline(x=i, color= sns.xkcd_rgb["dark peach"], alpha=.5)
+    ax2.axvline(x=i, color=sns.xkcd_rgb["dark peach"], alpha=.5)
 ax2.axhline(y=threshold, ls='dashed', label='Threshold', color=sns.xkcd_rgb["dark teal"])
 ax2.legend(bbox_to_anchor=(1, .3), borderaxespad=0., frameon=True)
 plot.ylabel("Log PD")
-ax2.set_xticklabels(df_dates_xticks['DIA'], rotation=30, fontsize=8)
+ax2.set_xticklabels(df_dates_xticks['DATE'], rotation=30, fontsize=8)
 plot.xticks(values_date)
-plot.title("Validation p-values")
+plot.title("Validation Mixed p-values")
 
 # Set up the xlabel and xtick
 # xticklabels = ax1.get_xticklabels() + ax2.get_xticklabels()
@@ -338,18 +333,18 @@ plot.ylabel("Power Price")
 
 ax2 = plot.subplot(212)
 values_date = np.arange(0, len(test_c.index), 50)
-test_c['DIA'] = test_c['DIA'].astype(str)
+test_c['DATE'] = test_c['DATE'].astype(str)
 df_dates_xticks = test_c[test_c.index.isin(values_date)]
 ax2.plot(test_p_values, label='Log PD', color=sns.xkcd_rgb["dark teal"])
 anomalies = test_c[test_c['TARGET'] == 1]
 anomalies = anomalies.index.values.tolist()
 print(anomalies)
 for i in anomalies:
-    ax2.axvline(x=i, color= sns.xkcd_rgb["dark peach"], alpha=.5)
+    ax2.axvline(x=i, color=sns.xkcd_rgb["dark peach"], alpha=.5)
 ax2.axhline(y=threshold, ls='dashed', label='Threshold', color=sns.xkcd_rgb["dark teal"])
 ax2.legend(bbox_to_anchor=(1, .3), borderaxespad=0., frameon=True)
 plot.ylabel("Log PD")
-ax2.set_xticklabels(df_dates_xticks['DIA'], rotation=30, fontsize=8)
+ax2.set_xticklabels(df_dates_xticks['DATE'], rotation=30, fontsize=8)
 plot.xticks(values_date)
 plot.title("test p-values")
 
@@ -357,7 +352,6 @@ plot.title("test p-values")
 # xticklabels = ax1.get_xticklabels() + ax2.get_xticklabels()
 plot.xlabel("Time step")
 plot.show()
-
 
 print(test_below_threshold[0])
 anomaly_dates_test = test_c[test_c.index.isin(test_below_threshold[0])]
@@ -369,6 +363,6 @@ test_df = pd.concat([test_c[['CONTROL', 'TARGET']], predicted_test, test_pvalues
 test_df['TARGET'] = test_df['TARGET'].map(int)
 predicted = [1 if e < threshold else 0 for e in test_df.LogPD.values]
 predicted = list(map(int, predicted))
-print('PRECISION ', precision_score(test_df.TARGET.values, predicted))
-print('RECALL ', recall_score(test_df.TARGET.values, predicted))
-print('FBSCORE ', fbeta_score(test_df.TARGET.values, predicted, beta=1))
+print('PRECISION TEST', precision_score(test_df.TARGET.values, predicted))
+print('RECALL TEST', recall_score(test_df.TARGET.values, predicted))
+print('FBSCORE TEST', fbeta_score(test_df.TARGET.values, predicted, beta=1))
