@@ -38,15 +38,12 @@ params = {
                   'PRICE_GAS', 'RISK_PREMIUM',
                   '%EOLICA'
                     ],
-    'linear_var': ['PSPAIN', 'DUMMY_FORW_15_DAY', 'sum(TOTAL_IMPORTACION_ES)',
-                  'sum(TOTAL_PRODUCCION_ES)', 'D1_QNORD'
-                'D1_QDIF',
+    'linear_var': ['PSPAIN', 'DUMMY_BACK_50_DAY', 'sum(TOTAL_IMPORTACION_ES)',
+                  'QDIF', 'sum(QNORD)', 'sum(TOTAL_PRODUCCION_ES)'
 
                   'sum(TOTAL_POT_IND_ES)', 'sum(TOTAL_PRODUCCION_POR)',
-                  'sum(HIDRAULICA_CONVENC)',
-                  'sum(HIDRAULICA_BOMBEO)', 'sum(NUCLEAR)', 'sum(CARBON NACIONAL)',
-                  'sum(CARBON_IMPO)', 'sum(CICLO_COMBINADO)', 'sum(FUEL_SIN_PRIMA)',
-                  'sum(FUEL_PRIMA)', 'sum(REG_ESPECIAL)', 'TREND', 'PRICE_OIL',
+
+                  'sum(CARBON_IMPO)',  'TREND', 'PRICE_OIL',
                   'PRICE_GAS', 'RISK_PREMIUM',
                   '%EOLICA',
                   'SUMMER', 'WINTER', 'NULL_PRICE']

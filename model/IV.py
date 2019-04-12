@@ -20,37 +20,52 @@ df['LQ2'] = df['QDIF'].shift(2)
 # AR Component
 df['ar.L1.PSPAIN'] = df['PSPAIN'].shift(1)
 df['ar.L2.PSPAIN'] = df['PSPAIN'].shift(2)
+df['ar.L3.PSPAIN'] = df['PSPAIN'].shift(3)
 df['ar.L4.PSPAIN'] = df['PSPAIN'].shift(4)
+df['ar.L5.PSPAIN'] = df['PSPAIN'].shift(5)
 df['ar.L6.PSPAIN'] = df['PSPAIN'].shift(6)
+df['ar.L7.PSPAIN'] = df['PSPAIN'].shift(7)
 
 # MA component
+'''
 width = 1
 lag = df['PSPAIN'].shift(width)
 window = lag.rolling(window=width + 2)
 means = pd.DataFrame(window.mean().values, columns=['ma.L1.PSPAIN'], index=df.index)
 df = pd.concat([df, means], axis=1)
-
+'''
 
 # X, Y
 y = df[['PSPAIN']]
-df['WORKDAY'] = df['WORKDAY'] + 1
-df['WORKDAY'] = np.log(df['WORKDAY'])-np.log((df['INDEX'] + 5))
-df['TME'] = df['TME_MADRID']**2 / (df['TAVG']**2 + 0.001)
+df['WORKDAY'] = (df['WORKDAY'] + 1)
+df['Portugal'] = (df['Portugal'] + 1)
+df['Norway'] = (df['Norway'] + 1)
+df['Sweden'] = (df['Sweden'] + 1)
+df['Denmark'] = (df['Denmark'] + 1)
+df['Finland'] = (df['Finland'] + 1)
+df['WINTER'] = (df['WINTER'] + 1)
+df['SUMMER'] = (df['SUMMER'] + 1)
+df['INDEX'] = df['INDEX'] + 5
+df['TME'] = (df['TAVG']+0.1)**2
+df['TMIN'] = (df['TMIN']+0.1)
+df['TMAX'] = (df['TMAX']+0.1)
+df['PRCP'] = (df['PRCP']) + 1
+df['TME_MADRID'] = df['TME_MADRID']**2
+df['PP*TMIN'] = df['TMAX'] * df['INDEX']
 
-
-instruments = ['WORKDAY', 'TME', 'WINTER']
+instruments = ['WORKDAY', 'INDEX', 'Portugal', 'TME', 'WINTER', 'PRCP', 'TMIN', 'SUMMER', 'Norway', 'Denmark', 'Finland', 'Sweden']
 inst_square = []
 for inst in instruments:
+    df[inst] = np.log(df[inst])
     df[inst] = (df[inst] - df[inst].shift(1)) - (df[inst].shift(1) - df[inst].shift(2))
-instruments += []
+instruments = ['WORKDAY']
 
 df = df.dropna(axis=0)
 print(df.shape)
-variable_used = ['D1_sum(CICLO_COMBINADO)', 'LQ1', 'LQ2', 'D1_sum(FUEL_PRIMA)',
-                 'D1_sum(HIDRAULICA_CONVENC)', 'DUMMY_FORW_45_DAY', 'ma.L1.PSPAIN', 'ar.L1.PSPAIN', 'ar.L2.PSPAIN',
-                 'ar.L4.PSPAIN', 'ar.L6.PSPAIN']
+variable_used = ['D_sum(TOTAL_IMPORTACION_ES)',
+            'D_NULL_PRICE', 'D_DUMMY_BACK_60_DAY']
 
-variable_instrumented = ['QDIF']
+variable_instrumented = ['D_sum(TOTAL_PRODUCCION_ES)']
 
 """
 To conduct IV estimations, we need to have instrumental
@@ -75,6 +90,47 @@ first_reg1 = sm.OLS(endog=df[variable_instrumented], exog=df[variable_used + ins
 results = first_reg1.fit()
 print(results.summary())
 
+"""
+In the first stage
+regression, we should conduct a F-test on all instruments to see if instruments are jointly
+significant in the endogenous variable, y2. 
+"""
+ftest = sm.OLS(endog=df[variable_instrumented], exog=df[instruments])
+results = ftest.fit()
+
+print('F-Statistic', results.fvalue)
+print('pvalue', results.f_pvalue)
+print(results.summary())
+
+# MODEL
+# First Stage: Reduced Form
+# QNORD
+instruments = ['TMIN', 'INDEX']
+variable_instrumented = ['D_sum(QNORD)']
+first_reg1 = sm.OLS(endog=df[variable_instrumented], exog=df[variable_used + instruments])
+results = first_reg1.fit()
+print(results.summary())
+
+"""
+In the first stage
+regression, we should conduct a F-test on all instruments to see if instruments are jointly
+significant in the endogenous variable, y2. 
+"""
+ftest = sm.OLS(endog=df[variable_instrumented], exog=df[instruments])
+results = ftest.fit()
+
+print('F-Statistic', results.fvalue)
+print('pvalue', results.f_pvalue)
+print(results.summary())
+
+# MODEL
+# First Stage: Reduced Form
+# QPortugal
+instruments = ['Portugal']
+variable_instrumented = ['D_sum(TOTAL_PRODUCCION_POR)']
+first_reg1 = sm.OLS(endog=df[variable_instrumented], exog=df[variable_used + instruments])
+results = first_reg1.fit()
+print(results.summary())
 
 """
 In the first stage
@@ -90,16 +146,38 @@ print(results.summary())
 
 # Second Stage
 y = df[['PSPAIN']]
-reg = IV2SLS(endog=y, exog=df[variable_used + variable_instrumented], instrument=df[variable_used + instruments])
-results = reg.fit()
+variable_used = ['D_sum(TOTAL_IMPORTACION_ES)',
+            'D_NULL_PRICE', 'LQ1', 'D_sum(TOTAL_PRODUCCION_POR)', 'D_DUMMY_BACK_60_DAY', 'ar.L1.PSPAIN',
+                 'ar.L2.PSPAIN', 'ar.L3.PSPAIN',
+                 'ar.L4.PSPAIN', 'ar.L5.PSPAIN', 'ar.L6.PSPAIN', 'ar.L7.PSPAIN']
+
+variable_instrumented = ['D_sum(TOTAL_PRODUCCION_ES)', 'D_sum(QNORD)']
+instruments = ['WORKDAY', 'INDEX', 'Portugal', 'D_sum(TOTAL_PRODUCCION_POR)']
+
+# QSPAIN predict
+predict_qesp = sm.OLS(endog=df['D_sum(TOTAL_PRODUCCION_ES)'], exog=df[['D_sum(TOTAL_IMPORTACION_ES)',
+            'D_NULL_PRICE', 'D_DUMMY_BACK_60_DAY', 'WORKDAY']]).fit()
+
+predict_qesp = predict_qesp.predict(df[['D_sum(TOTAL_IMPORTACION_ES)',
+            'D_NULL_PRICE', 'D_DUMMY_BACK_60_DAY', 'WORKDAY']])
+
+predict_qesp = pd.DataFrame(predict_qesp, columns=['QSPAIN'])
+predict_qesp['LQ1'] = predict_qesp['QSPAIN'].shift(1)
+
+# QNORD Predict
+predict_nor = sm.OLS(endog=df['D_sum(QNORD)'], exog=df[['TMIN', 'INDEX', 'D_sum(TOTAL_IMPORTACION_ES)',
+            'D_NULL_PRICE', 'D_DUMMY_BACK_60_DAY']]).fit()
+
+predict_nor = predict_nor.predict(df[['TMIN', 'INDEX', 'D_sum(TOTAL_IMPORTACION_ES)',
+            'D_NULL_PRICE', 'D_DUMMY_BACK_60_DAY']])
+
+predict_nor = pd.DataFrame(predict_nor, columns=['QNORD'])
+
+df = pd.concat([df.drop('LQ1', axis=1), predict_nor, predict_qesp], axis=1)
+
+mod = sm.tsa.ARMA(endog=df['PSPAIN'], exog=df[['D_sum(TOTAL_IMPORTACION_ES)',
+            'D_NULL_PRICE', 'LQ1','D_DUMMY_BACK_60_DAY', 'QSPAIN', 'QNORD', 'D_sum(TOTAL_PRODUCCION_POR)']],
+                  order=(7, 0), missing='drop')
+results = mod.fit(trend='nc')
 print(results.summary())
 
-# Second stage
-mod = iv2reg(y, df[variable_used], df[variable_instrumented], df[instruments])
-res = mod.fit(cov_type='unadjusted')
-print(res.durbin())
-print(res.wu_hausman())
-print(res.wooldridge_regression)
-print(res.sargan)
-print(res.anderson_rubin)
-print(res.basmann_f)

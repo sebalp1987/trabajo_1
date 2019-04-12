@@ -14,8 +14,8 @@ class Preprocess(SparkJob):
         self._spark = self.get_spark_session("IdTask")
 
     def run(self):
-        df_price, df_demanda, df_produccion, df_pinternac, df_nholiday, df_subasta, df_weather_nor = self._extract_data()
-        df = self._transform_data(df_price, df_demanda, df_produccion, df_pinternac, df_nholiday, df_subasta, df_weather_nor)
+        df_price, df_demanda, df_produccion, df_pinternac, df_nholiday, df_subasta, df_weather_nor, df_nor_produccion = self._extract_data()
+        df = self._transform_data(df_price, df_demanda, df_produccion, df_pinternac, df_nholiday, df_subasta, df_weather_nor, df_nor_produccion)
         self._load_data(df)
         self._spark.stop()
 
@@ -44,10 +44,12 @@ class Preprocess(SparkJob):
 
         df_weather_nor = pd.read_csv(STRING.file_nor_weather, sep=';')
 
-        return df_price, df_demanda, df_produccion, df_pinternac, df_nholiday, df_subasta, df_weather_nor
+        df_nor_produccion = self._spark.read.csv(STRING.file_nor_produccion, sep=';', header=True)
+
+        return df_price, df_demanda, df_produccion, df_pinternac, df_nholiday, df_subasta, df_weather_nor, df_nor_produccion
 
     @staticmethod
-    def _transform_data(df_price, df_demanda, df_produccion, df_pinternac, df_nholiday, df_subasta, df_weather_nor):
+    def _transform_data(df_price, df_demanda, df_produccion, df_pinternac, df_nholiday, df_subasta, df_weather_nor, df_nor_produccion):
         """Transform original dataset.
 
         :param df: Input DataFrame.
@@ -97,7 +99,7 @@ class Preprocess(SparkJob):
 
         # Group By Day
         df_price = (df_price
-                    .groupby('DATE').agg({'PESPANIA': 'avg', 'PPORTUGAL': 'avg', 'PNORD': 'avg', 'QNORD': 'sum'})
+                    .groupby('DATE').agg({'PESPANIA': 'avg', 'PPORTUGAL': 'avg', 'PNORD': 'avg'})
                     .withColumnRenamed('avg(PESPANIA)', 'PSPAIN')
                     .withColumnRenamed('avg(PPORTUGAL)', 'PPORTUGAL')
                     .withColumnRenamed('avg(PNORD)', 'PNORD')
@@ -117,6 +119,11 @@ class Preprocess(SparkJob):
         df = df.join(df_demanda, how='left', on='DATE')
         df = df.join(df_produccion, how='left', on='DATE')
 
+        # NOR PRODUCCION
+        df_nor_produccion = df_nor_produccion.withColumn('sum(QNORD)', df_nor_produccion['NO'] + df_nor_produccion['SE']
+                                                         + df_nor_produccion['FI'] + df_nor_produccion['DK'])
+        df = df.join(df_nor_produccion.select(['DATE', 'sum(QNORD)']), how='left', on='DATE')
+
         # INTERPOLATE
         df = df.toPandas()
         df_pinternac = df_pinternac.interpolate(limit_direction='backward', method='nearest')
@@ -126,8 +133,10 @@ class Preprocess(SparkJob):
 
         df_weather_nor = df_weather_nor[df_weather_nor['NAME'] == 'HELSINKI']
         df_weather_nor = df_weather_nor.interpolate(limit_direction='backward', method='linear')
+        '''
         for colm in ['TAVG', 'TMAX', 'TMIN']:
             df_weather_nor[colm] = ((df_weather_nor[colm] - 32)*5/9).map(int) # Farenheit to Celsius
+        '''
         df_weather_nor = df_weather_nor.groupby(
             ['DATE']).agg(
             {
@@ -148,7 +157,7 @@ class Preprocess(SparkJob):
 
         # DUMMY VARS
         df = df.sort_values(by='DATE', ascending=True)
-        dummy_var = [3, 5, 7, 10, 14, 15, 20, 25, 30, 45]
+        dummy_var = [3, 5, 7, 10, 14, 15, 20, 25, 30, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90]
         df.loc[df['DUMMY'].isin(['0', 0]), 'DUMMY'] = np.NaN
         for i in dummy_var:
             name = 'DUMMY_BACK_' + str(i) + '_DAY'
@@ -176,11 +185,19 @@ class Preprocess(SparkJob):
             df.loc[df['DATE'] == i, 'WORKDAY'] = 0
         del df['WEEKDAY']
         df_nholiday['DATE'] = pd.to_datetime(df_nholiday['DATE'], format='%d/%m/%Y')
-        df = pd.merge(df, df_nholiday[['DATE', 'INDEX']], how='left', on='DATE')
+        df = pd.merge(df, df_nholiday[['DATE', 'Portugal', 'Sweden', 'Norway', 'Denmark', 'Finland', 'INDEX']], how='left', on='DATE')
         df['INDEX'] = df['INDEX'].fillna(0)
+        df['Portugal'] = df['Portugal'].fillna(0)
+        df['Norway'] = df['Norway'].fillna(0)
+        df['Sweden'] = df['Sweden'].fillna(0)
+        df['Denmark'] = df['Denmark'].fillna(0)
+        df['Finland'] = df['Finland'].fillna(0)
         df.loc[(df['WORKDAY'] == 1) & (df['INDEX'] == 0), 'INDEX'] = 1
-
-
+        df.loc[(df['WORKDAY'] == 1) & (df['Portugal'] == 0), 'Portugal'] = 1
+        df.loc[(df['WORKDAY'] == 1) & (df['Sweden'] == 0), 'Sweden'] = 1
+        df.loc[(df['WORKDAY'] == 1) & (df['Norway'] == 0), 'Norway'] = 1
+        df.loc[(df['WORKDAY'] == 1) & (df['Denmark'] == 0), 'Denmark'] = 1
+        df.loc[(df['WORKDAY'] == 1) & (df['Finland'] == 0), 'Finland'] = 1
         # NULL PRICE
         df['NULL_PRICE'] = pd.Series(0, index=df.index)
         df.loc[df['DATE'].between('2013-03-28', '2013-04-02', inclusive=True), 'NULL_PRICE'] = 1
@@ -198,8 +215,6 @@ class Preprocess(SparkJob):
             df[i] = df[i].round(2)
 
         return df
-
-
 
     def _load_data(self, df):
         """Collect data locally and write to CSV.

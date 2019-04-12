@@ -3,9 +3,7 @@ import matplotlib.pyplot as plot
 import pandas as pd
 import seaborn as sns
 from statsmodels.tsa.seasonal import seasonal_decompose
-from statsmodels.regression.linear_model import OLS
-from statsmodels.tools import add_constant
-from scipy.stats import normaltest, shapiro
+
 import numpy as np
 
 from resource import temporal_statistics as sts
@@ -22,7 +20,6 @@ print(df.columns)
 # VARIABLE Y
 df['PSPAIN'] = np.log(df['PSPAIN'] + 1) - np.log(df['PNORD'] + 1)
 df['QDIF'] = np.log(df['sum(TOTAL_PRODUCCION_ES)'] + 1) - np.log(df['sum(QNORD)'] + 1)
-del df['sum(TOTAL_PRODUCCION_ES)'], df['sum(QNORD)']
 
 # 1) ESTACIONARIEDAD Y: TEST DF Var Y
 t_value, critical_value = sts.test_stationarity(df['PSPAIN'], plot_show=True)
@@ -48,9 +45,9 @@ for col in df.columns.values.tolist():
 bool_cols = [col for col in df
              if df[[col]].dropna().isin([0, 1]).all().values]
 for cols in df.drop(['PSPAIN', 'TREND', 'TME_MADRID', 'TMAX_MADRID',
-                'PP_MADRID', 'WORKDAY', 'SUMMER', 'WINTER', 'TME_BCN', 'TMAX_BCN', 'TMIN_BCN', 'PP_BCN', 'QDIF', 'INDEX',
-                'PRCP', 'TAVG', 'TMAX', 'TMIN'
-                     ] + bool_cols, axis=1).columns.values.tolist():
+                'PP_MADRID', 'WORKDAY', 'SUMMER', 'WINTER', 'TME_BCN', 'TMAX_BCN', 'TMIN_BCN', 'PP_BCN', 'INDEX', 'QDIF',
+                'PRCP', 'TAVG', 'TMAX', 'TMIN', 'Portugal', 'Norway', 'Denmark', 'Finland', 'Sweden'
+                     ], axis=1).columns.values.tolist():
 
     # df[cols] = np.log(df[cols]) log-linear
     df[cols] = df[cols].map(float)
@@ -66,7 +63,6 @@ for cols in df.drop(['PSPAIN', 'TREND', 'TME_MADRID', 'TMAX_MADRID',
                                                             plot_show=False)
     except:
         pass
-
 
     # GRENGER
     '''
@@ -86,13 +82,8 @@ for cols in df.drop(['PSPAIN', 'TREND', 'TME_MADRID', 'TMAX_MADRID',
     max_aic_lag = best_aic.index(max(best_aic)) + 1
     sts.granger_causality(df, cols, dependant_variable='PSPAIN', maxlag=max_aic_lag + m)
     '''
-    if dif > 0:
-        df['D' + str(dif) + '_' + cols] = df[cols] - df[cols].shift(dif)
-        del df[cols]
-
-for i in ['TME_MADRID', 'TMAX_MADRID',
-                'PP_MADRID', 'TME_BCN', 'TMAX_BCN', 'TMIN_BCN', 'PP_BCN']:
-    df[i] = np.log(df[i] + 1)
+    df['D_' + cols] = (df[cols] - df[cols].shift(1)) - (df[cols].shift(1) - df[cols].shift(2))
+    del df[cols]
 
 
 df = df.dropna(axis=0)

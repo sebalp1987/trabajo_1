@@ -1,11 +1,13 @@
 import pandas as pd
 import STRING
 import seaborn as sns
+import numpy as np
 import statsmodels.api as sm
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 import matplotlib.pyplot as plot
 from scipy.stats import normaltest, shapiro
-from sklearn.metrics import r2_score
+from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
+from sklearn import linear_model
 import resource.temporal_statistics as sts
 from preprocessing import stepwise_reg
 from config import config
@@ -25,6 +27,7 @@ variable_used = variables
 
 
 df = df.set_index('DATE')
+
 df['LQ1'] = df['QDIF'].shift(1)
 df['LQ2'] = df['QDIF'].shift(2)
 df['LQ3'] = df['QDIF'].shift(3)
@@ -43,7 +46,7 @@ vif['vif'] = [variance_inflation_factor(x_ols.values, i) for i in
               range(x_ols.shape[1])]
 vif['features'] = x_ols.columns
 print(vif)
-x_ols = x_ols.drop(['TREND', 'sum(REG_ESPECIAL)', 'sum(TOTAL_IMPORTACION_ES)', 'sum(HIDRAULICA_BOMBEO)'], axis=1)
+#x_ols = x_ols.drop(['TREND', 'sum(REG_ESPECIAL)', 'sum(TOTAL_IMPORTACION_ES)', 'sum(HIDRAULICA_BOMBEO)'], axis=1)
 
 vif = pd.DataFrame()
 vif['vif'] = [variance_inflation_factor(x_ols.values, i) for i in
@@ -56,7 +59,7 @@ print(vif)
 # 4) STEPWISE REGRESION
 names = x_ols.columns
 variables = stepwise_reg.stepwise_regression.setpwise_reg(x_ols.values.tolist(), y.values.tolist(), names)
-var_dummy = [var for var in x_ols.columns.values.tolist() if var.startswith('DUMMY')]
+var_dummy = [var for var in x_ols.columns.values.tolist() if var.startswith('D_DUMMY')]
 print('ACA', var_dummy[0])
 if var_dummy[0] not in variables:
     variables.append(var_dummy[0])
@@ -112,14 +115,15 @@ del res
 
 print(x_ols.columns)
 '''
-x_ols = x_ols.drop(['sum(REG_ESPECIAL)', 'sum(HIDRAULICA_BOMBEO)', 'D1_PRICE_OIL', 'D1_PRICE_GAS',
-                    'sum(CARBON_IMPO)', 'D1_sum(TOTAL_POT_IND_ES)', 'D1_%EOLICA', 'D1_sum(FUEL_PRIMA)',
-                    'D1_RISK_PREMIUM', 'D1_sum(CARBON NACIONAL)'
+x_ols = x_ols.drop(['D_NULL_PRICE', 'D_sum(CARBON NACIONAL)', 'LQ2'
                     ], axis=1)
+
 '''
 # BEST MODEL
-x_ols = df[['QDIF', 'D1_sum(CICLO_COMBINADO)', 'LQ1', 'LQ2', 'D1_sum(FUEL_PRIMA)',
-            'D1_sum(HIDRAULICA_CONVENC)'] + [var_dummy[0]]]
+
+x_ols = df[['D_sum(QNORD)', 'D_sum(TOTAL_PRODUCCION_ES)', 'D_sum(TOTAL_IMPORTACION_ES)',
+            'D_NULL_PRICE', 'LQ1', 'D_sum(TOTAL_PRODUCCION_POR)'
+            ] + [var_dummy[0]]]
 '''
 best_aic = []
 ar_ma = []
@@ -145,11 +149,12 @@ print(ar_ma)
 ar_ma_coef = ar_ma[best_aic.index(min(best_aic))]
 print('ARMA COEFFICIENTS', ar_ma_coef)
 '''
-ar_ma_coef = [1, 1]
-
+ar_ma_coef = [7, 0]
+'''
 x_ols['ar.L2.PSPAIN'] = y['PSPAIN'].shift(2)
 x_ols['ar.L4.PSPAIN'] = y['PSPAIN'].shift(4)
 x_ols['ar.L6.PSPAIN'] = y['PSPAIN'].shift(6)
+'''
 x_ols = x_ols.dropna(axis=0)
 y = y[x_ols.index[0]::]
 
@@ -166,21 +171,22 @@ res = pd.concat([res, y], axis=1)
 res['error'] = res['PSPAIN'] - res['predict']
 
 # RESIDUAL ESTATIONARITY
-sts.test_stationarity(res['error'], plot_show=False)
+print('dw test', sm.stats.stattools.durbin_watson(res['error'], axis=0))
+sts.test_stationarity(res['error'], plot_show=True)
 
 # RESIDUAL SERIAL CORRELATION
-sts.serial_correlation(res['error'], plot_show=False)
+sts.serial_correlation(res['error'], plot_show=True)
 fig, ax = plot.subplots(2, 1, figsize=(15, 8))
 fig = sm.graphics.tsa.plot_acf(res['error'], lags=50, ax=ax[0])
 fig = sm.graphics.tsa.plot_pacf(res['error'], lags=50, ax=ax[1])
-# plot.show()
+plot.show()
 plot.close()
 
 # NORMALIDAD RESIDUOS
 sns.distplot(res['error'], hist=True, kde=True, color = 'darkblue',
              hist_kws={'edgecolor': 'black'},
              kde_kws={'linewidth': 4})
-# plot.show()
+plot.show()
 plot.close()
 
 alpha = 0.05
@@ -205,4 +211,3 @@ vif['vif'] = [variance_inflation_factor(x_ols.values, i) for i in
               range(x_ols.shape[1])]
 vif['features'] = x_ols.columns
 print(vif)
-
