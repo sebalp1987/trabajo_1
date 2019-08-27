@@ -63,7 +63,7 @@ instruments = ['WORKDAY']
 df = df.dropna(axis=0)
 print(df.shape)
 variable_used = ['D_sum(TOTAL_IMPORTACION_ES)',
-            'D_NULL_PRICE', 'D_DUMMY_BACK_60_DAY']
+            'D_NULL_PRICE', 'D_DUMMY_BACK_50_DAY']
 
 variable_instrumented = ['D_sum(TOTAL_PRODUCCION_ES)']
 
@@ -147,7 +147,7 @@ print(results.summary())
 # Second Stage
 y = df[['PSPAIN']]
 variable_used = ['D_sum(TOTAL_IMPORTACION_ES)',
-            'D_NULL_PRICE', 'LQ1', 'D_sum(TOTAL_PRODUCCION_POR)', 'D_DUMMY_BACK_60_DAY', 'ar.L1.PSPAIN',
+            'D_NULL_PRICE', 'LQ1', 'D_sum(TOTAL_PRODUCCION_POR)', 'D_DUMMY_BACK_50_DAY', 'ar.L1.PSPAIN',
                  'ar.L2.PSPAIN', 'ar.L3.PSPAIN',
                  'ar.L4.PSPAIN', 'ar.L5.PSPAIN', 'ar.L6.PSPAIN', 'ar.L7.PSPAIN']
 
@@ -156,27 +156,27 @@ instruments = ['WORKDAY', 'INDEX', 'Portugal', 'D_sum(TOTAL_PRODUCCION_POR)']
 
 # QSPAIN predict
 predict_qesp = sm.OLS(endog=df['D_sum(TOTAL_PRODUCCION_ES)'], exog=df[['D_sum(TOTAL_IMPORTACION_ES)',
-            'D_NULL_PRICE', 'D_DUMMY_BACK_60_DAY', 'WORKDAY']]).fit()
+            'D_NULL_PRICE', 'D_DUMMY_BACK_50_DAY', 'WORKDAY']]).fit()
 
 predict_qesp = predict_qesp.predict(df[['D_sum(TOTAL_IMPORTACION_ES)',
-            'D_NULL_PRICE', 'D_DUMMY_BACK_60_DAY', 'WORKDAY']])
+            'D_NULL_PRICE', 'D_DUMMY_BACK_50_DAY', 'WORKDAY']])
 
 predict_qesp = pd.DataFrame(predict_qesp, columns=['QSPAIN'])
 predict_qesp['LQ1'] = predict_qesp['QSPAIN'].shift(1)
 
 # QNORD Predict
 predict_nor = sm.OLS(endog=df['D_sum(QNORD)'], exog=df[['TMIN', 'INDEX', 'D_sum(TOTAL_IMPORTACION_ES)',
-            'D_NULL_PRICE', 'D_DUMMY_BACK_60_DAY']]).fit()
+            'D_NULL_PRICE', 'D_DUMMY_BACK_50_DAY']]).fit()
 
 predict_nor = predict_nor.predict(df[['TMIN', 'INDEX', 'D_sum(TOTAL_IMPORTACION_ES)',
-            'D_NULL_PRICE', 'D_DUMMY_BACK_60_DAY']])
+            'D_NULL_PRICE', 'D_DUMMY_BACK_50_DAY']])
 
 predict_nor = pd.DataFrame(predict_nor, columns=['QNORD'])
 
 df = pd.concat([df.drop('LQ1', axis=1), predict_nor, predict_qesp], axis=1)
 
 mod = sm.tsa.ARMA(endog=df['PSPAIN'], exog=df[['D_sum(TOTAL_IMPORTACION_ES)',
-            'D_NULL_PRICE', 'LQ1','D_DUMMY_BACK_60_DAY', 'QSPAIN', 'QNORD', 'D_sum(TOTAL_PRODUCCION_POR)']],
+            'D_NULL_PRICE', 'LQ1','D_DUMMY_BACK_50_DAY', 'QSPAIN', 'QNORD', 'D_sum(TOTAL_PRODUCCION_POR)']],
                   order=(7, 0), missing='drop')
 results = mod.fit(trend='nc')
 print(results.summary())

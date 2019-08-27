@@ -38,7 +38,7 @@ params = {
                   'PRICE_GAS', 'RISK_PREMIUM',
                   '%EOLICA'
                     ],
-    'linear_var': ['PSPAIN', 'DUMMY_BACK_50_DAY', 'sum(TOTAL_IMPORTACION_ES)',
+    'linear_var': ['PSPAIN', 'DUMMY_BACK_70_DAY', 'sum(TOTAL_IMPORTACION_ES)',
                   'QDIF', 'sum(QNORD)', 'sum(TOTAL_PRODUCCION_ES)'
 
                   'sum(TOTAL_POT_IND_ES)', 'sum(TOTAL_PRODUCCION_POR)',

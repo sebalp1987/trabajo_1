@@ -3,21 +3,46 @@ import STRING
 import seaborn as sns
 import matplotlib.pyplot as plot
 import numpy as np
+import statsmodels.api as sm
+from datetime import timedelta
 sns.set()
 
 df = pd.read_csv(STRING.final_file_hr, sep=';')
 df['DATE'] = pd.to_datetime(df['DATE'], format='%Y-%m-%d')
+df = df[df['DATE'] <= '2013-12-31']
 df = df.sort_values(by='DATE', ascending=True).reset_index(drop=True)
 df['DATE'] = df['DATE'].apply(lambda x: x.date()).map(str)
-x = df['DATE'].tolist()
+wft_ciclo, wft_tend = sm.tsa.filters.hpfilter(df['PSPAIN'])
+df['PSPAIN'] = wft_tend
+'''
 plot.plot(df['DATE'], df['PSPAIN'], label='Spain')
-plot.plot(df['PNORD'], label='Nord Pool')
-xposition = ['2013-03-20', '2013-06-25', '2013-12-24']
-for xv in xposition:
-    plot.axvline(x=xv, color='k', linestyle='--')
-plot.xticks(x[::20], fontsize=10, rotation=45)
-plot.legend()
+x = df['DATE'].tolist()
+plot.xticks(x[::90], fontsize=10, rotation=45)
+plot.ylabel('Mean Average Price (€)')
 plot.show()
+plot.close()
+'''
+
+wft_ciclo, wft_tend = sm.tsa.filters.hpfilter(df['PNORD'])
+df['PNORD'] = wft_tend
+position = ['2013-03-20', '2013-06-25', '2013-12-24']
+for i in position:
+    df_i = df[df['DATE'] <= i]
+
+    if position.index(i) > 0:
+        df_i = df_i[df_i['DATE'] >= position[position.index(i) - 1]]
+
+    plot.plot(df_i['DATE'], df_i['PSPAIN'], label='Spain')
+    plot.plot(df_i['DATE'], df_i['PNORD'], label='Nord Pool')
+    xv = pd.to_datetime(i, format='%Y-%m-%d') - timedelta(days=70)
+    x = df_i['DATE'].tolist()
+    plot.axvline(x=xv.strftime('%Y-%m-%d'), color='k', linestyle='--', labeL='70 days before')
+    plot.axvline(x=i, color='k', linestyle='-', label='Auction')
+    plot.xticks(x[::5], fontsize=10, rotation=45)
+    plot.title('Parallel Trends')
+    plot.legend(loc='lower right')
+    plot.show()
+    plot.close()
 
 
 # Weather condition

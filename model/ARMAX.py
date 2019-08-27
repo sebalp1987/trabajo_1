@@ -12,8 +12,8 @@ import resource.temporal_statistics as sts
 from preprocessing import stepwise_reg
 from config import config
 sns.set()
-
-df = pd.read_csv(STRING.file_detrend, sep=';')
+file = STRING.file_detrend_0712
+df = pd.read_csv(file, sep=';')
 print(df.columns)
 # Variables Used
 variable_used = config.params.get('linear_var')
@@ -25,7 +25,7 @@ for col in variable_used:
 
 variable_used = variables
 
-
+df = df[df['DATE'] > '2007-07-01']
 df = df.set_index('DATE')
 
 df['LQ1'] = df['QDIF'].shift(1)
@@ -64,7 +64,7 @@ print('ACA', var_dummy[0])
 if var_dummy[0] not in variables:
     variables.append(var_dummy[0])
 print(variables)
-x_ols = x_ols[variables]
+#x_ols = x_ols[variables]
 reg1 = sm.OLS(endog=y, exog=x_ols, missing='none')
 results = reg1.fit()
 print(results.summary())
@@ -120,10 +120,13 @@ x_ols = x_ols.drop(['D_NULL_PRICE', 'D_sum(CARBON NACIONAL)', 'LQ2'
 
 '''
 # BEST MODEL
+if file == STRING.file_detrend_0712:
+    x_ols = df[['D_sum(TOTAL_PRODUCCION_ES)', 'D_sum(TOTAL_IMPORTACION_ES)',
+                'D_NULL_PRICE', 'LQ1', 'D_sum(TOTAL_PRODUCCION_POR)'] + [var_dummy[0]]]
+else:
+    x_ols = df[['D_sum(QNORD)', 'D_sum(TOTAL_PRODUCCION_ES)', 'D_sum(TOTAL_IMPORTACION_ES)',
+    'D_NULL_PRICE', 'LQ1', 'D_sum(TOTAL_PRODUCCION_POR)' ] + [var_dummy[0]]]
 
-x_ols = df[['D_sum(QNORD)', 'D_sum(TOTAL_PRODUCCION_ES)', 'D_sum(TOTAL_IMPORTACION_ES)',
-            'D_NULL_PRICE', 'LQ1', 'D_sum(TOTAL_PRODUCCION_POR)'
-            ] + [var_dummy[0]]]
 '''
 best_aic = []
 ar_ma = []
@@ -160,8 +163,8 @@ y = y[x_ols.index[0]::]
 
 mod = sm.tsa.ARMA(endog=y, exog=x_ols, order=(ar_ma_coef[0], ar_ma_coef[1]), missing='drop')
 results = mod.fit(trend='nc')
+print(results.summary().as_latex())
 print(results.summary())
-
 # RESIDUALS
 y = y.reset_index(drop=True)
 prediction = results.predict(start=0, end=y.index[len(y)-1])
@@ -172,13 +175,13 @@ res['error'] = res['PSPAIN'] - res['predict']
 
 # RESIDUAL ESTATIONARITY
 print('dw test', sm.stats.stattools.durbin_watson(res['error'], axis=0))
-sts.test_stationarity(res['error'], plot_show=True)
+sts.test_stationarity(res['error'], plot_show=False)
 
 # RESIDUAL SERIAL CORRELATION
-sts.serial_correlation(res['error'], plot_show=True)
+sts.serial_correlation(res['error'], plot_show=False)
 fig, ax = plot.subplots(2, 1, figsize=(15, 8))
-fig = sm.graphics.tsa.plot_acf(res['error'], lags=50, ax=ax[0])
-fig = sm.graphics.tsa.plot_pacf(res['error'], lags=50, ax=ax[1])
+fig = sm.graphics.tsa.plot_acf(res['error'], lags=19, ax=ax[0])
+fig = sm.graphics.tsa.plot_pacf(res['error'], lags=19, ax=ax[1])
 plot.show()
 plot.close()
 
@@ -186,7 +189,7 @@ plot.close()
 sns.distplot(res['error'], hist=True, kde=True, color = 'darkblue',
              hist_kws={'edgecolor': 'black'},
              kde_kws={'linewidth': 4})
-plot.show()
+# plot.show()
 plot.close()
 
 alpha = 0.05

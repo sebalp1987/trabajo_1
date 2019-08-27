@@ -9,8 +9,8 @@ import numpy as np
 from resource import temporal_statistics as sts
 
 sns.set()
-
-df = pd.read_csv(STRING.final_file_hr, sep=';', encoding='latin1', date_parser=['DATE'])
+file = STRING.final_file_hr_0712
+df = pd.read_csv(file, sep=';', encoding='latin1', date_parser=['DATE'])
 df['DATE'] = pd.to_datetime(df['DATE'])
 df = df[df['DATE'] < '2014-02-01']
 df = df.sort_values(by='DATE', ascending=True)
@@ -18,8 +18,12 @@ df = df.set_index('DATE')
 print(df.columns)
 
 # VARIABLE Y
-df['PSPAIN'] = np.log(df['PSPAIN'] + 1) - np.log(df['PNORD'] + 1)
-df['QDIF'] = np.log(df['sum(TOTAL_PRODUCCION_ES)'] + 1) - np.log(df['sum(QNORD)'] + 1)
+if file == STRING.final_file_hr_0712:
+    df['PSPAIN'] = np.log(df['PSPAIN'] + 1)
+    df['QDIF'] = np.log(df['sum(TOTAL_PRODUCCION_ES)'] + 1)
+else:
+    df['PSPAIN'] = np.log(df['PSPAIN'] + 1) - np.log(df['PNORD'] + 1)
+    df['QDIF'] = np.log(df['sum(TOTAL_PRODUCCION_ES)'] + 1) - np.log(df['sum(QNORD)'] + 1)
 
 # 1) ESTACIONARIEDAD Y: TEST DF Var Y
 t_value, critical_value = sts.test_stationarity(df['PSPAIN'], plot_show=True)
@@ -44,10 +48,17 @@ for col in df.columns.values.tolist():
     df[col] = df[col].map(float)
 bool_cols = [col for col in df
              if df[[col]].dropna().isin([0, 1]).all().values]
-for cols in df.drop(['PSPAIN', 'TREND', 'TME_MADRID', 'TMAX_MADRID',
+if file == STRING.final_file_hr_0712:
+    drop_var = ['PSPAIN', 'TREND', 'TME_MADRID', 'TMAX_MADRID',
+                'PP_MADRID', 'WORKDAY', 'SUMMER', 'WINTER', 'TME_BCN', 'TMAX_BCN', 'TMIN_BCN', 'PP_BCN',
+                'QDIF'
+                ]
+else:
+    drop_var = ['PSPAIN', 'TREND', 'TME_MADRID', 'TMAX_MADRID',
                 'PP_MADRID', 'WORKDAY', 'SUMMER', 'WINTER', 'TME_BCN', 'TMAX_BCN', 'TMIN_BCN', 'PP_BCN', 'INDEX', 'QDIF',
                 'PRCP', 'TAVG', 'TMAX', 'TMIN', 'Portugal', 'Norway', 'Denmark', 'Finland', 'Sweden'
-                     ], axis=1).columns.values.tolist():
+                     ]
+for cols in df.drop(drop_var, axis=1).columns.values.tolist():
 
     # df[cols] = np.log(df[cols]) log-linear
     df[cols] = df[cols].map(float)
@@ -87,4 +98,8 @@ for cols in df.drop(['PSPAIN', 'TREND', 'TME_MADRID', 'TMAX_MADRID',
 
 
 df = df.dropna(axis=0)
-df.to_csv(STRING.file_detrend, index=True, sep=';')
+if file == STRING.final_file_hr_0712:
+    to_file = STRING.file_detrend_0712
+else:
+    to_file = STRING.file_detrend
+df.to_csv(to_file, index=True, sep=';')

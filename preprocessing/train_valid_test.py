@@ -8,7 +8,10 @@ sns.set()
 
 df = pd.read_csv(STRING.final_file_hr, sep=';', encoding='latin1', date_parser=['DATE'])
 df['DATE'] = pd.to_datetime(df['DATE'])
-df = df[df['DATE'] < '2014-02-01']
+# df = df[df['DATE'] < '2014-02-01']
+df.loc[df['DATE']>'2014-01-01', 'DUMMY_BACK_70_DAY'] = 0
+df['TARGET'] = pd.Series(0, index=df.index)
+df.loc[df['DATE'] <= '2013-12-31', 'TARGET'] = 1
 df = df.sort_values(by='DATE', ascending=True)
 df = df.set_index('DATE')
 print(df.columns)
@@ -55,7 +58,6 @@ for inst in instruments:
     df[inst] = (df[inst] - df[inst].shift(1)) - (df[inst].shift(1) - df[inst].shift(2))
 
 df = df.dropna(axis=0)
-print(df.columns)
 
 df = df[['PSPAIN',  'QDIF',
          'sum(TOTAL_IMPORTACION_ES)',
@@ -67,29 +69,24 @@ df = df[['PSPAIN',  'QDIF',
          'sum(FUEL_SIN_PRIMA)', 'sum(FUEL_PRIMA)', 'sum(REG_ESPECIAL)', 'TREND',
          'PRICE_OIL', 'PRICE_GAS', 'RISK_PREMIUM',
          'GDP', '%EOLICA', 'PRCP', 'TMAX', 'TMIN', 'TAVG', 'WORKDAY', 'NULL_PRICE', 'SUMMER',
-         'WINTER', 'DUMMY_FORW_30_DAY', 'DUMMY_FORW_5_DAY']]
+         'WINTER', 'DUMMY_BACK_70_DAY', 'TARGET']]
 
 # Normal - Anormal: 5-30 days
-abnormal = df[(df['DUMMY_FORW_30_DAY'] == 1)&(df['DUMMY_FORW_5_DAY'] == 0)] # 5 to 30 days
+train = df[df['TARGET'] == 0].drop(['DUMMY_BACK_70_DAY'], axis=1)
+df = df[df['TARGET'] == 1]
+
+
+abnormal = df[(df['DUMMY_BACK_70_DAY'] == 1)] # 5 to 30 days
 normal = df[-df.isin(abnormal)].dropna()
-
-abnormal = abnormal.drop(['DUMMY_FORW_30_DAY', 'DUMMY_FORW_5_DAY'], axis=1)
-normal = normal.drop(['DUMMY_FORW_30_DAY', 'DUMMY_FORW_5_DAY'], axis=1)
-normal['TARGET'] = pd.Series(0, index=normal.index)
+print(normal.shape)
+abnormal = abnormal.drop(['DUMMY_BACK_70_DAY'], axis=1)
+normal = normal.drop(['DUMMY_BACK_70_DAY'], axis=1)
 abnormal['TARGET'] = pd.Series(1, index=abnormal.index)
-
-valid_abnormal, test_abnormal = train_test_split(abnormal, shuffle=False, train_size=0.50)
-train, test_normal = train_test_split(normal, shuffle=False, test_size=len(test_abnormal.index))
-test = pd.concat([test_abnormal, test_normal], axis=0)
-
-train, valid_normal = train_test_split(train, shuffle=False, test_size=len(valid_abnormal.index))
-valid_mixed = pd.concat([valid_abnormal, valid_normal], axis=0)
-
-train, valid_normal = train_test_split(train, shuffle=False, test_size=0.2)
-
+normal['TARGET'] = pd.Series(0, index=normal.index)
+valid_normal, valid_mixed = train_test_split(normal, shuffle=None, train_size=0.5)
 train.to_csv(STRING.train, sep=';', index=True)
 valid_mixed.to_csv(STRING.valid_mixed, sep=';', index=True)
 valid_normal.to_csv(STRING.valid_normal, sep=';', index=True)
-test.to_csv(STRING.test, sep=';', index=True)
+abnormal.to_csv(STRING.test, sep=';', index=True)
 
 
